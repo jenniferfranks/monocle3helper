@@ -62,7 +62,10 @@ estimate_cell_cycle <- function(cds) {
 
   gene_names <- as.character(gene_names)
 
-  counts_mat <- monocle3::counts(cds)
+  # counts_mat <- as.matrix(monocle3::counts(cds))
+  # bug found: counts not exported by monocle3
+  # bug fix: use monocle3::exprs instead
+  counts_mat <- Matrix(monocle3::exprs(cds), sparse = TRUE)
   size_factors <- SummarizedExperiment::colData(cds)$Size_Factor
 
   ## --------------------------------
@@ -71,7 +74,10 @@ estimate_cell_cycle <- function(cds) {
   s_idx <- gene_names %in% s_genes
   if (any(s_idx)) {
     s_expr <- counts_mat[s_idx, , drop = FALSE]
-    s_expr <- t(t(s_expr) / size_factors)
+    # s_expr <- t(t(s_expr) / size_factors)
+    # bug found: sparse matrix calculation encountering error
+    # bug fix: rewrite calculation for sparse matrix
+    s_expr <- s_expr %*%  Diagonal(x = 1 / size_factors)
     s_score <- Matrix::colSums(s_expr)
   } else {
     s_score <- rep(0, ncol(cds))
@@ -83,7 +89,10 @@ estimate_cell_cycle <- function(cds) {
   g2m_idx <- gene_names %in% g2m_genes
   if (any(g2m_idx)) {
     g2m_expr <- counts_mat[g2m_idx, , drop = FALSE]
-    g2m_expr <- t(t(g2m_expr) / size_factors)
+    # g2m_expr <- t(t(g2m_expr) / size_factors)
+    # bug found: sparse matrix calculation encountering error
+    # bug fix: rewrite calculation for sparse matrix
+    g2m_expr <- g2m_expr %*% Diagonal(x = 1 / size_factors)
     g2m_score <- Matrix::colSums(g2m_expr)
   } else {
     g2m_score <- rep(0, ncol(cds))
@@ -97,5 +106,7 @@ estimate_cell_cycle <- function(cds) {
   SummarizedExperiment::colData(cds)$proliferation_index <-
     log1p(s_score + g2m_score)
 
-  cds
+  # add a gc() to release memory usage due to dense matrix
+  gc()
+  return(cds)
 }
