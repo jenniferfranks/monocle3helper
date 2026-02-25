@@ -81,26 +81,6 @@ score_gene_sets <- function(cds,
     set_name <- names(gene_sets)[i]
     gene_list <- unique(gene_sets[[i]])
 
-    # Build binary membership matrix
-    gene.group <- matrix(
-      nrow = length(gene_names),
-      ncol = 2
-    )
-
-    gene.group[, 1] <- gene_names
-    gene.group[, 2] <- as.numeric(gene_names %in% gene_list)
-
-    rownames(gene.group) <- rownames(rowData(cds))
-    colnames(gene.group) <- c("gene", "in_set")
-
-    # Aggregate expression
-    agg <- aggregate_gene_expression(
-      cds,
-      gene.group,
-      scale_agg_values = scale_agg,
-      norm_method = norm_method,
-      gene_agg_fun = gene_agg_fun
-    )
 
     gene.group <- data.frame(
       gene  = gene_names,
