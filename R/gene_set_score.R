@@ -102,12 +102,21 @@ score_gene_sets <- function(cds,
       gene_agg_fun = gene_agg_fun
     )
 
-    # Extract scores
-    if (nrow(agg) == 0) next
+    gene.group <- data.frame(
+      gene  = gene_names,
+      group = ifelse(gene_names %in% gene_list, set_name, "other"),
+      row.names = rownames(rowData(cds))
+    )
 
-    results[[set_name]] <- as.numeric(agg[1, ])
+    agg <- aggregate_gene_expression(
+      cds, gene.group,
+      scale_agg_values = scale_agg,
+      norm_method = norm_method,
+      gene_agg_fun = gene_agg_fun
+    )
 
-
+    if (!(set_name %in% rownames(agg))) next
+    results[[set_name]] <- as.numeric(agg[set_name, ])
   }
 
   return(results)
