@@ -3,7 +3,7 @@
 calculate_mito <- function(cds, pattern = "^MT-|^mt-") {
   
   # Identify mitochondrial genes based on the pattern
-  all_genes <- rownames(cds)
+  all_genes <- fData(cds)$gene_short_name
   mito_genes <- grep(pattern = pattern, x = all_genes, value = TRUE)
   
 
