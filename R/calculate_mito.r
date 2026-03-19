@@ -25,7 +25,7 @@ calculate_mito <- function(cds, pattern = "^MT-|^mt-") {
       return(cds)
     }
   }
-  counts_matrix <- monocle3::counts(cds)
+  counts_matrix <- counts(cds)
 
   #  Calculate mitochondrial counts per cell
   mito_counts_matrix <- counts_matrix[mito_genes, , drop = FALSE]
