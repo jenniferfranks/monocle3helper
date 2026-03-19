@@ -19,7 +19,7 @@ calculate_mito <- function(cds, pattern = "^MT-|^mt-") {
     #check if these exist in CDS
     if(!any(mito_genes %in% all_genes)){
       # If no mitochondrial genes are found, assign NA/0 to the new column
-      monocle3::colData(cds)[[col_name]] <- NA
+      colData(cds)[[col_name]] <- NA
       return(cds)
     }
   }
@@ -39,7 +39,7 @@ calculate_mito <- function(cds, pattern = "^MT-|^mt-") {
   )
 
   #Add the new column to the cell metadata (colData, which is pData in older SingleCellExperiment/Monocle versions)
-  monocle3::colData(cds)[["perc_mitochondrial_umis"]] <- percent_mito
+  colData(cds)[["perc_mitochondrial_umis"]] <- percent_mito
 
   return(cds)
 }
