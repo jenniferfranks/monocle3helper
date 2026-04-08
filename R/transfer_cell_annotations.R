@@ -2,47 +2,37 @@
 # Transfer cell-level annotations between monocle3 CDS objects
 # --------------------------------------------------------------
 # Input: reference CDS object with celltype annotations
-#          target CDS object
+#        target CDS object
 #
 # Output: target CDS object with transferred celltype annotations
 #
 # Usage:
-#.  cds2 <- transfer_cell_annotations(
-#.    cds_ref    = cds1,
-#.    cds_target = cds2,
-#.    annotation_col = "cell_type",
-#.    cell_id_col = "cell"   # set to NULL to use rownames
-#.  )
+# cds2 <- transfer_cell_annotations(
+#   cds_ref = cds1,
+#   cds_target = cds2,
+#   annotation_col = "cell_type",
+#   new_annotation_col = "cell_type",
+#   cell_id_col = "cell",   # set to NULL to use rownames
+#   preserve_unmatched = TRUE
+# )
 #' @export
 
 transfer_cell_annotations <- function(
-    cds_ref,  # reference (old) dataset
-    cds_target,   # target (new) dataset
-    annotation_col,    #column name where original annotations are written
-    new_annotation_col = NULL,    #column name to be added to the target/new dataset
+    cds_ref,
+    cds_target,
+    annotation_col,
+    new_annotation_col = NULL,
     cell_id_col = NULL,
+    preserve_unmatched = TRUE,
     verbose = TRUE
 ) {
   # Extract pData
-  pd_ref <- as.data.frame(pData(cds_ref))
-  pd_target <- as.data.frame(pData(cds_target))
+  pd_ref <- as.data.frame(pData(cds_ref), stringsAsFactors = FALSE)
+  pd_target <- as.data.frame(pData(cds_target), stringsAsFactors = FALSE)
 
   # Determine output column name
   if (is.null(new_annotation_col)) {
     new_annotation_col <- annotation_col
-  }
-
-  # Determine cell identifiers
-  if (!is.null(cell_id_col)) {
-    if (!cell_id_col %in% colnames(pd_ref) ||
-        !cell_id_col %in% colnames(pd_target)) {
-      stop("cell_id_col not found in both cds_ref and cds_target pData")
-    }
-    ref_ids <- pd_ref[[cell_id_col]]
-    target_ids <- pd_target[[cell_id_col]]
-  } else {
-    ref_ids <- rownames(pd_ref)
-    target_ids <- rownames(pd_target)
   }
 
   # Check annotation column exists in reference
@@ -50,33 +40,72 @@ transfer_cell_annotations <- function(
     stop("annotation_col not found in cds_ref pData")
   }
 
-  # Warn if overwriting existing column
-  if (new_annotation_col %in% colnames(pd_target)) {
-    warning(
-      "Column '", new_annotation_col,
-      "' already exists in cds_target pData and will be overwritten"
+  # Determine cell identifiers
+  if (!is.null(cell_id_col)) {
+    if (!cell_id_col %in% colnames(pd_ref)) {
+      stop("cell_id_col not found in cds_ref pData")
+    }
+    if (!cell_id_col %in% colnames(pd_target)) {
+      stop("cell_id_col not found in cds_target pData")
+    }
+
+    ref_ids <- as.character(pd_ref[[cell_id_col]])
+    target_ids <- as.character(pd_target[[cell_id_col]])
+  } else {
+    ref_ids <- rownames(pd_ref)
+    target_ids <- rownames(pd_target)
+  }
+
+  # Basic checks
+  if (anyDuplicated(ref_ids) > 0) {
+    dup_ids <- unique(ref_ids[duplicated(ref_ids)])
+    stop(
+      "Duplicate reference cell IDs found. Example duplicates: ",
+      paste(head(dup_ids, 10), collapse = ", ")
     )
   }
 
-  # Create mapping table
-  mapping <- data.frame(
-    cell_id = ref_ids,
-    annotation = pd_ref[[annotation_col]],
-    stringsAsFactors = FALSE
-  )
+  if (length(ref_ids) != nrow(pd_ref)) {
+    stop("Length of reference IDs does not match number of reference cells")
+  }
+
+  if (length(target_ids) != nrow(pd_target)) {
+    stop("Length of target IDs does not match number of target cells")
+  }
+
+  # Create mapping
+  mapping <- setNames(as.character(pd_ref[[annotation_col]]), ref_ids)
 
   # Match target cells to reference
-  match_idx <- match(target_ids, mapping$cell_id)
-  transferred <- mapping$annotation[match_idx]
+  match_idx <- match(target_ids, ref_ids)
+  matched <- !is.na(match_idx)
+  transferred <- rep(NA_character_, length(target_ids))
+  transferred[matched] <- mapping[target_ids[matched]]
 
-  # Assign annotation
-  pData(cds_target)[[new_annotation_col]] <- transferred
+  # Build output vector
+  if (new_annotation_col %in% colnames(pd_target)) {
+    existing_values <- as.character(pd_target[[new_annotation_col]])
+  } else {
+    existing_values <- rep(NA_character_, length(target_ids))
+  }
+
+  output_values <- existing_values
+
+  if (preserve_unmatched) {
+    output_values[matched] <- transferred[matched]
+  } else {
+    output_values <- transferred
+  }
+
+  # Assign annotation back to CDS
+  pData(cds_target)[[new_annotation_col]] <- output_values
 
   # Diagnostics
   if (verbose) {
     n_total <- length(target_ids)
-    n_matched <- sum(!is.na(match_idx))
-    n_unmatched <- sum(is.na(match_idx))
+    n_matched <- sum(matched)
+    n_unmatched <- sum(!matched)
+    n_ref_na <- sum(is.na(pd_ref[[annotation_col]]))
 
     message("Annotation transfer summary:")
     message("  Reference annotation: ", annotation_col)
@@ -84,16 +113,18 @@ transfer_cell_annotations <- function(
     message("  Total target cells:   ", n_total)
     message("  Matched cells:        ", n_matched)
     message("  Unmatched cells:      ", n_unmatched)
+    message("  NA annotations in ref:", n_ref_na)
+    message("  preserve_unmatched:   ", preserve_unmatched)
 
-    if (n_unmatched > 0) {
-      message("  Unmatched cells assigned NA")
+    if (preserve_unmatched) {
+      message("  Unmatched target cells retained their previous values")
+    } else {
+      message("  Unmatched target cells assigned NA")
     }
   }
 
   return(cds_target)
 }
-
-
 
 # --------------------------------------------------------------
 # Determine majority annotation per cluster
