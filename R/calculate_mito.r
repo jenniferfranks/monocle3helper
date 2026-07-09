@@ -34,7 +34,7 @@ calculate_mito <- function(cds, pattern = "^MT-|^mt-",
     return(cds)
   }
   
-  counts_matrix <- counts(cds)
+  counts_matrix <- monocle3::exprs(cds)
   
   total_mito_counts <- Matrix::colSums(counts_matrix[mito_idx, , drop = FALSE])
   total_counts <- Matrix::colSums(counts_matrix)

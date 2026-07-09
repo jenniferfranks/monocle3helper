@@ -107,7 +107,7 @@ build_visium_cds <- function(
   ## ------------------------------------------------------------
   ## Basic QC filtering
   ## ------------------------------------------------------------
-  total_umi <- Matrix::colSums(monocle3::counts(cds))
+  total_umi <- Matrix::colSums(monocle3::exprs(cds))
   cds <- cds[, total_umi > min_umi]
 
   cds <- monocle3::detect_genes(cds)

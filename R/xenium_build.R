@@ -122,7 +122,7 @@ build_xenium_cds <- function(
   ## ------------------------------------------------------------
   ## Basic QC filtering
   ## ------------------------------------------------------------
-  total_counts <- Matrix::colSums(monocle3::counts(cds))
+  total_counts <- Matrix::colSums(monocle3::exprs(cds))
   cds <- cds[, total_counts > min_counts]
 
   cds <- monocle3::detect_genes(cds)

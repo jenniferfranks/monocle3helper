@@ -16,7 +16,7 @@ run_scrublet <- function(
     reticulate::use_condaenv(conda_env, required = TRUE)
   }
 
-  counts_matrix <- t(monocle3::counts(cds))
+  counts_matrix <- t(monocle3::exprs(cds))
 
   reticulate::py_run_string("import scrublet as scr")
 
