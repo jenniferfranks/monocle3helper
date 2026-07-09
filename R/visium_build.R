@@ -55,14 +55,10 @@ build_visium_cds <- function(
   for (i in seq_len(n)) {
     message("Reading Visium h5: ", sample_table$h5_file[i])
 
-    cds_i <- read_cellranger_visium_h5(
-      h5_file = sample_table$h5_file[i]
-    )
+    cds_i <- read.cds.cellranger.h5.file(sample_table$h5_file[i])
 
     # Enforce unique barcodes across samples
-    colnames(monocle3::exprs(cds_i)) <-
-      paste0(colnames(monocle3::exprs(cds_i)),
-             sample_table$barcode_suffix[i])
+    colnames(cds_i) <- paste0(colnames(cds_i), sample_table$barcode_suffix[i])
 
     SummarizedExperiment::colData(cds_i)$sample_numeric <- i
 

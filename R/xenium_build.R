@@ -66,9 +66,7 @@ build_xenium_cds <- function(
     cds_i <- read.cds.cellranger.h5.file(sample_table$h5_file[i])
 
     # Enforce unique cell IDs across samples
-    colnames(monocle3::exprs(cds_i)) <-
-      paste0(colnames(monocle3::exprs(cds_i)),
-             sample_table$barcode_suffix[i])
+    colnames(cds_i) <- paste0(colnames(cds_i), sample_table$barcode_suffix[i])
 
     SummarizedExperiment::colData(cds_i)$sample_numeric <- i
 
