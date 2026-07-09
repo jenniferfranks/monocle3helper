@@ -65,8 +65,14 @@ build_xenium_cds <- function(
 
     cds_i <- read.cds.cellranger.h5.file(sample_table$h5_file[i])
 
+    # cell_feature_matrix.h5 barcodes carry a 10x-style "-<N>" GEM-well
+    # suffix (e.g. "aaaeodmb-1") that cells.csv's cell_id column does not
+    # (just "aaaeodmb"); strip it so cell IDs still match cells.csv after
+    # read_xenium_cells() attaches spatial metadata below.
+    bare_barcodes <- sub("-[0-9]+$", "", colnames(cds_i))
+
     # Enforce unique cell IDs across samples
-    colnames(cds_i) <- paste0(colnames(cds_i), sample_table$barcode_suffix[i])
+    colnames(cds_i) <- paste0(bare_barcodes, sample_table$barcode_suffix[i])
 
     SummarizedExperiment::colData(cds_i)$sample_numeric <- i
 
