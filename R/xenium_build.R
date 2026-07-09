@@ -65,9 +65,11 @@ build_xenium_cds <- function(
 
     cds_i <- read.cds.cellranger.h5.file(sample_table$h5_file[i])
 
-    # Enforce unique cell IDs across samples
-    colnames(cds_i) <- paste0(colnames(cds_i), sample_table$barcode_suffix[i])
-
+    # Track the original h5 barcode and originating sample via colData:
+    # monocle3::combine_cds() applies its own disambiguating suffix to
+    # colnames() when merging, so we can't rely on colnames() alone to
+    # reconstruct a stable cell ID after combining.
+    SummarizedExperiment::colData(cds_i)$raw_barcode <- colnames(cds_i)
     SummarizedExperiment::colData(cds_i)$sample_numeric <- i
 
     cds_list[[i]] <- cds_i
@@ -83,6 +85,14 @@ build_xenium_cds <- function(
   ## ------------------------------------------------------------
   numeric_sample <- as.character(
     SummarizedExperiment::colData(cds)$sample_numeric
+  )
+
+  # Rebuild colnames from the tracked raw barcode + our own barcode_suffix,
+  # overriding whatever combine_cds() renamed them to, so downstream joins
+  # against cells_csv (which use this same barcode_suffix convention) work.
+  colnames(cds) <- paste0(
+    SummarizedExperiment::colData(cds)$raw_barcode,
+    sample_table$barcode_suffix[as.integer(numeric_sample)]
   )
 
   map_sample_id <- stats::setNames(
