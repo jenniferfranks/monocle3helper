@@ -14,11 +14,12 @@ Description: More about what it does (maybe more than one line).
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
-Imports: 
+Imports:
     data.table,
     dplyr,
     ggplot2,
     gprofiler2,
+    grDevices,
     hdf5r,
     imager,
     jsonlite,
