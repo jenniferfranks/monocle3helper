@@ -161,12 +161,27 @@ build_xenium_cds <- function(
     SummarizedExperiment::colData(cds)[[col]] <- result[[col]]
   }
 
+  n_unmatched <- sum(is.na(result$x_centroid))
+  if (n_unmatched > 0) {
+    warning(
+      n_unmatched, " of ", nrow(result),
+      " cells had no matching row in cells_csv and will be dropped ",
+      "(check that cells_csv corresponds to the same Xenium run as h5_file)."
+    )
+    cds <- cds[, !is.na(SummarizedExperiment::colData(cds)$x_centroid)]
+  }
+
   ## ------------------------------------------------------------
   ## QC filtering on nucleus area
   ## ------------------------------------------------------------
   if ("nucleus_area" %in% colnames(SummarizedExperiment::colData(cds))) {
-    cds <- cds[, SummarizedExperiment::colData(cds)$nucleus_area > min_nucleus_area]
-    cds <- cds[, SummarizedExperiment::colData(cds)$nucleus_area < max_nucleus_area]
+    nucleus_area <- SummarizedExperiment::colData(cds)$nucleus_area
+    cds <- cds[
+      ,
+      !is.na(nucleus_area) &
+        nucleus_area > min_nucleus_area &
+        nucleus_area < max_nucleus_area
+    ]
   }
 
   ## ------------------------------------------------------------
