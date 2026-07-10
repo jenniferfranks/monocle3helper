@@ -11,8 +11,8 @@
 #' @param sample_id Sample identifier matching colData(cds)$sample.
 #' @param point_size Size of cell centroid points.
 #' @param point_alpha Transparency of cell centroid points.
-#' @param img_buffer_only_cells Logical; restrict image to region
-#'   containing cells.
+#' @param img_buffer_only_cells Logical; crop the view to the region
+#'   containing cells rather than showing the full image extent.
 #' @param palette Color palette type.
 #' @param custom_cols Custom colors if palette = "custom".
 #' @param viridis_opt Viridis palette option.
@@ -60,18 +60,13 @@ plot_signature_spatial_sample_xenium <- function(
     stop("Cell centroid coordinates missing from colData(cds).")
   }
 
-  ## -------------------- image pixels --------------------
-  if (is.null(images$image)) {
-    stop("No morphology image available. Did you run build_xenium_images()?")
-  }
-
-  df_img <- images$image[images$image$sample == sample_id, , drop = FALSE]
-  if (nrow(df_img) == 0) {
-    stop("No image pixels found for sample_id: ", sample_id)
-  }
-
-  if (img_buffer_only_cells && "contains_cells" %in% colnames(df_img)) {
-    df_img <- df_img[df_img$contains_cells == "yes", , drop = FALSE]
+  ## -------------------- image --------------------
+  img_entry <- images$images[[sample_id]]
+  if (is.null(img_entry)) {
+    stop(
+      "No morphology image available for sample_id: ", sample_id,
+      ". Did you run build_xenium_images()?"
+    )
   }
 
   ## -------------------- centroid coordinates in image pixel space --------------------
@@ -79,8 +74,10 @@ plot_signature_spatial_sample_xenium <- function(
   df_cells$x_pixel <- df_cells$x_centroid / effective_pixel_size
   df_cells$y_pixel <- df_cells$y_centroid / effective_pixel_size
 
-  ## -------------------- aspect ratio --------------------
-  xy_ratio <- diff(range(df_img$x, na.rm = TRUE)) / diff(range(df_img$y, na.rm = TRUE))
+  view_xlim <- if (img_buffer_only_cells) img_entry$cells_xlim else img_entry$xlim
+  view_ylim <- if (img_buffer_only_cells) img_entry$cells_ylim else img_entry$ylim
+
+  xy_ratio <- diff(view_xlim) / diff(view_ylim)
 
   ## -------------------- color scale --------------------
   color_scale <- switch(
@@ -113,12 +110,18 @@ plot_signature_spatial_sample_xenium <- function(
   sample_label <- unique(df_cells$sample_label)
 
   ## -------------------- plot --------------------
+  # annotation_raster() always draws row 1 of the raster at whatever data-y
+  # value is passed as ymax; ymin/ymax are swapped here (relative to the
+  # image's natural 0..height extent) so that, combined with
+  # scale_y_reverse() below, the image keeps the same orientation as cell
+  # points (whose y_pixel also increases downward, matching image rows).
   ggplot2::ggplot() +
-    ggplot2::geom_raster(
-      data = df_img,
-      ggplot2::aes(x = x, y = y, fill = rgb.val)
+    ggplot2::annotation_raster(
+      img_entry$raster,
+      xmin = img_entry$xlim[1], xmax = img_entry$xlim[2],
+      ymin = img_entry$ylim[2], ymax = img_entry$ylim[1]
     ) +
-    ggplot2::scale_fill_identity() +
+    ggplot2::coord_cartesian(xlim = view_xlim, ylim = view_ylim, expand = FALSE) +
     ggplot2::scale_y_reverse() +
     ggplot2::geom_point(
       data = df_cells,

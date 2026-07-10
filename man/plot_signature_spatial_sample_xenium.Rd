@@ -32,8 +32,8 @@ coordinates and the signature column.}
 
 \item{point_alpha}{Transparency of cell centroid points.}
 
-\item{img_buffer_only_cells}{Logical; restrict image to region
-containing cells.}
+\item{img_buffer_only_cells}{Logical; crop the view to the region
+containing cells rather than showing the full image extent.}
 
 \item{palette}{Color palette type.}
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/xenium_images.R
 \name{build_xenium_images}
 \alias{build_xenium_images}
-\title{Build Xenium morphology image pixel data frames aligned to cell centroids}
+\title{Build Xenium morphology images aligned to cell centroids}
 \usage{
 build_xenium_images(
   cds,
@@ -24,8 +24,9 @@ and \code{sample} columns in colData (see \code{build_xenium_cds()}).}
 \item{channel}{Integer morphology channel index, matching the
 \code{morphology_focus_XXXX.ome.tif} file name (0 = DAPI by default).}
 
-\item{level}{Pyramid level to load (0 = full resolution). Use a level
-high enough that the resulting image is tractable as a data.frame.}
+\item{level}{Pyramid level to load (0 = full resolution). Even with
+raster-based rendering, very low levels can still be too large/slow;
+raise this if loading is slow or memory-heavy.}
 
 \item{pixel_size_um}{Physical size, in microns, of one full-resolution
 (\code{level = 0}) pixel. Defaults to the standard Xenium value.}
@@ -33,8 +34,9 @@ high enough that the resulting image is tractable as a data.frame.}
 \item{downsample_factor}{Optional override for the pyramid downsample
 factor at \code{level}. Defaults to \code{2^level}.}
 
-\item{img_buffer}{Pixel buffer around cells used to flag image regions
-containing tissue.}
+\item{img_buffer}{Pixel buffer around cells used to compute a suggested
+cell-focused crop region (\code{cells_xlim}/\code{cells_ylim}) for
+plotting, without discarding any raster data.}
 
 \item{conda_env}{Optional conda environment name containing
 \code{tifffile} (and \code{imagecodecs} for compressed OME-TIFFs).}
@@ -42,8 +44,11 @@ containing tissue.}
 \value{
 A list with elements:
   \describe{
-    \item{image}{Pixel-level data.frame with columns x, y, rgb.val,
-      sample, sample_label, sample_group, contains_cells}
+    \item{images}{A named list, keyed by \code{sample_id}, each containing
+      \code{raster} (a \code{grDevices::as.raster} object), \code{xlim}/
+      \code{ylim} (full image pixel extent), \code{cells_xlim}/
+      \code{cells_ylim} (suggested crop region around cells), and
+      \code{sample_label}/\code{sample_group}.}
     \item{channel}{Channel index used}
     \item{level}{Pyramid level used}
     \item{pixel_size_um}{Full-resolution pixel size in microns}
@@ -54,14 +59,17 @@ A list with elements:
 \description{
 Reads a single-channel morphology OME-TIFF pyramid level for each
 Xenium sample (via reticulate + the Python \code{tifffile} package)
-and converts it into a pixel-level data frame aligned to cell centroid
+and converts it into a raster object aligned to cell centroid
 coordinates in a monocle3 cell_data_set.
 }
 \details{
-Xenium morphology images are typically tens of thousands of pixels per
-side at full resolution, which is far too large to represent as a
-pixel-per-row data.frame. Use \code{level > 0} to load a downsampled
-pyramid level; this function assumes each pyramid level downsamples by
-a factor of \code{2^level} relative to full resolution (override with
-\code{downsample_factor} if a sample's pyramid uses a different scheme).
+Each sample's image is kept as a single \code{\link[grDevices]{as.raster}}
+object (rendered via \code{\link[ggplot2]{annotation_raster}}) rather than
+a pixel-per-row data.frame, since Xenium morphology images are typically
+tens of thousands of pixels per side even at moderate pyramid levels --
+far too large to explode into one row per pixel. Use \code{level > 0} to
+load a downsampled pyramid level; this function assumes each pyramid
+level downsamples by a factor of \code{2^level} relative to full
+resolution (override with \code{downsample_factor} if a sample's pyramid
+uses a different scheme).
 }

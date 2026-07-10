@@ -1,37 +1,45 @@
-#' Build Xenium morphology image pixel data frames aligned to cell centroids
+#' Build Xenium morphology images aligned to cell centroids
 #'
 #' Reads a single-channel morphology OME-TIFF pyramid level for each
 #' Xenium sample (via reticulate + the Python \code{tifffile} package)
-#' and converts it into a pixel-level data frame aligned to cell centroid
+#' and converts it into a raster object aligned to cell centroid
 #' coordinates in a monocle3 cell_data_set.
 #'
-#' Xenium morphology images are typically tens of thousands of pixels per
-#' side at full resolution, which is far too large to represent as a
-#' pixel-per-row data.frame. Use \code{level > 0} to load a downsampled
-#' pyramid level; this function assumes each pyramid level downsamples by
-#' a factor of \code{2^level} relative to full resolution (override with
-#' \code{downsample_factor} if a sample's pyramid uses a different scheme).
+#' Each sample's image is kept as a single \code{\link[grDevices]{as.raster}}
+#' object (rendered via \code{\link[ggplot2]{annotation_raster}}) rather than
+#' a pixel-per-row data.frame, since Xenium morphology images are typically
+#' tens of thousands of pixels per side even at moderate pyramid levels --
+#' far too large to explode into one row per pixel. Use \code{level > 0} to
+#' load a downsampled pyramid level; this function assumes each pyramid
+#' level downsamples by a factor of \code{2^level} relative to full
+#' resolution (override with \code{downsample_factor} if a sample's pyramid
+#' uses a different scheme).
 #'
 #' @param cds A monocle3 cell_data_set with \code{x_centroid}/\code{y_centroid}
 #'   and \code{sample} columns in colData (see \code{build_xenium_cds()}).
 #' @param sample_table A data.frame produced by discover_xenium_sample_table().
 #' @param channel Integer morphology channel index, matching the
 #'   \code{morphology_focus_XXXX.ome.tif} file name (0 = DAPI by default).
-#' @param level Pyramid level to load (0 = full resolution). Use a level
-#'   high enough that the resulting image is tractable as a data.frame.
+#' @param level Pyramid level to load (0 = full resolution). Even with
+#'   raster-based rendering, very low levels can still be too large/slow;
+#'   raise this if loading is slow or memory-heavy.
 #' @param pixel_size_um Physical size, in microns, of one full-resolution
 #'   (\code{level = 0}) pixel. Defaults to the standard Xenium value.
 #' @param downsample_factor Optional override for the pyramid downsample
 #'   factor at \code{level}. Defaults to \code{2^level}.
-#' @param img_buffer Pixel buffer around cells used to flag image regions
-#'   containing tissue.
+#' @param img_buffer Pixel buffer around cells used to compute a suggested
+#'   cell-focused crop region (\code{cells_xlim}/\code{cells_ylim}) for
+#'   plotting, without discarding any raster data.
 #' @param conda_env Optional conda environment name containing
 #'   \code{tifffile} (and \code{imagecodecs} for compressed OME-TIFFs).
 #'
 #' @return A list with elements:
 #'   \describe{
-#'     \item{image}{Pixel-level data.frame with columns x, y, rgb.val,
-#'       sample, sample_label, sample_group, contains_cells}
+#'     \item{images}{A named list, keyed by \code{sample_id}, each containing
+#'       \code{raster} (a \code{grDevices::as.raster} object), \code{xlim}/
+#'       \code{ylim} (full image pixel extent), \code{cells_xlim}/
+#'       \code{cells_ylim} (suggested crop region around cells), and
+#'       \code{sample_label}/\code{sample_group}.}
 #'     \item{channel}{Channel index used}
 #'     \item{level}{Pyramid level used}
 #'     \item{pixel_size_um}{Full-resolution pixel size in microns}
@@ -75,7 +83,7 @@ build_xenium_images <- function(
   df_cells <- as.data.frame(SummarizedExperiment::colData(cds))
   df_cells$sample <- as.character(df_cells$sample)
 
-  img_list <- list()
+  image_list <- list()
 
   for (i in seq_len(nrow(sample_table))) {
 
@@ -107,49 +115,37 @@ build_xenium_images <- function(
     img_mat <- as.matrix(img_py)
 
     n_pixels <- length(img_mat)
-    if (n_pixels > 5e6) {
+    if (n_pixels > 2e7) {
       warning(
         "Loaded image for sample ", sample_id, " has ", n_pixels,
-        " pixels at level ", level, ". Consider a higher level for a ",
-        "more tractable pixel data.frame."
+        " pixels at level ", level, ". Consider a higher level if this is ",
+        "slow or memory-heavy."
       )
     }
 
-    dims <- dim(img_mat)
-    value <- as.vector(img_mat)
-    value_range <- range(value, na.rm = TRUE)
-    value_norm <- if (diff(value_range) > 0) {
-      (value - value_range[1]) / diff(value_range)
+    value_range <- range(img_mat, na.rm = TRUE)
+    img_norm <- if (diff(value_range) > 0) {
+      (img_mat - value_range[1]) / diff(value_range)
     } else {
-      rep(0, length(value))
+      matrix(0, nrow = nrow(img_mat), ncol = ncol(img_mat))
     }
-
-    df_img <- data.frame(
-      y   = rep(seq_len(dims[1]), times = dims[2]),
-      x   = rep(seq_len(dims[2]), each  = dims[1])
-    )
-    df_img$rgb.val <- grDevices::grey(value_norm)
-
-    df_img$sample       <- sample_id
-    df_img$sample_label <- sample_table$sample_label[i]
-    df_img$sample_group <- sample_table$sample_group[i]
 
     x_rng <- range(df_samp$x_centroid / effective_pixel_size, na.rm = TRUE)
     y_rng <- range(df_samp$y_centroid / effective_pixel_size, na.rm = TRUE)
 
-    df_img$contains_cells <- ifelse(
-      df_img$x >= (x_rng[1] - img_buffer) &
-        df_img$x <= (x_rng[2] + img_buffer) &
-        df_img$y >= (y_rng[1] - img_buffer) &
-        df_img$y <= (y_rng[2] + img_buffer),
-      "yes", "no"
+    image_list[[sample_id]] <- list(
+      raster       = grDevices::as.raster(img_norm),
+      xlim         = c(0, ncol(img_mat)),
+      ylim         = c(0, nrow(img_mat)),
+      cells_xlim   = c(x_rng[1] - img_buffer, x_rng[2] + img_buffer),
+      cells_ylim   = c(y_rng[1] - img_buffer, y_rng[2] + img_buffer),
+      sample_label = sample_table$sample_label[i],
+      sample_group = sample_table$sample_group[i]
     )
-
-    img_list[[length(img_list) + 1]] <- df_img
   }
 
   list(
-    image                   = if (length(img_list) > 0) dplyr::bind_rows(img_list) else NULL,
+    images                  = image_list,
     channel                 = channel,
     level                   = level,
     pixel_size_um           = pixel_size_um,
