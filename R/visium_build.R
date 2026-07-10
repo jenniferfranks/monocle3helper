@@ -12,7 +12,11 @@
 #' @param min_umi Minimum total UMIs per spot.
 #' @param min_genes Minimum detected genes per spot.
 #' @param num_dim Number of dimensions for PCA preprocessing.
-#' @param cluster_res Resolution parameter for clustering.
+#' @param k Number of nearest neighbors used to build the graph for
+#'   Leiden clustering. Larger k gives fewer, coarser clusters.
+#' @param cluster_res Optional resolution parameter for clustering. Defaults
+#'   to NULL, letting monocle3 determine resolution automatically from k;
+#'   set this explicitly only if you need to override that.
 #' @param random_seed Random seed for reproducibility.
 #'
 #' @return A processed monocle3 cell_data_set containing all samples.
@@ -23,7 +27,8 @@ build_visium_cds <- function(
     min_umi     = 100,
     min_genes   = 10,
     num_dim     = 25,
-    cluster_res = 1e-3,
+    k           = 20,
+    cluster_res = NULL,
     random_seed = 12345
 ) {
 
@@ -140,6 +145,7 @@ build_visium_cds <- function(
 
   cds <- monocle3::cluster_cells(
     cds,
+    k = k,
     resolution = cluster_res,
     random_seed = random_seed
   )
