@@ -11,7 +11,8 @@ build_xenium_cds(
   min_nucleus_area = 6,
   max_nucleus_area = 80,
   num_dim = 50,
-  cluster_res = 0.001,
+  k = 20,
+  cluster_res = NULL,
   random_seed = 12345
 )
 }
@@ -31,7 +32,12 @@ build_xenium_cds(
 
 \item{num_dim}{Number of dimensions for PCA preprocessing.}
 
-\item{cluster_res}{Resolution parameter for clustering.}
+\item{k}{Number of nearest neighbors used to build the graph for
+Leiden clustering. Larger k gives fewer, coarser clusters.}
+
+\item{cluster_res}{Optional resolution parameter for clustering. Defaults
+to NULL, letting monocle3 determine resolution automatically from k;
+set this explicitly only if you need to override that.}
 
 \item{random_seed}{Random seed for reproducibility.}
 }

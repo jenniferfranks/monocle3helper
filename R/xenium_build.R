@@ -17,7 +17,11 @@
 #' @param min_nucleus_area Minimum nucleus area (square microns) per cell.
 #' @param max_nucleus_area Maximum nucleus area (square microns) per cell.
 #' @param num_dim Number of dimensions for PCA preprocessing.
-#' @param cluster_res Resolution parameter for clustering.
+#' @param k Number of nearest neighbors used to build the graph for
+#'   Leiden clustering. Larger k gives fewer, coarser clusters.
+#' @param cluster_res Optional resolution parameter for clustering. Defaults
+#'   to NULL, letting monocle3 determine resolution automatically from k;
+#'   set this explicitly only if you need to override that.
 #' @param random_seed Random seed for reproducibility.
 #'
 #' @return A processed monocle3 cell_data_set containing all samples.
@@ -30,7 +34,8 @@ build_xenium_cds <- function(
     min_nucleus_area = 6,
     max_nucleus_area = 80,
     num_dim          = 50,
-    cluster_res      = 1e-3,
+    k                = 20,
+    cluster_res      = NULL,
     random_seed      = 12345
 ) {
 
@@ -216,6 +221,7 @@ build_xenium_cds <- function(
 
   cds <- monocle3::cluster_cells(
     cds,
+    k = k,
     resolution = cluster_res,
     random_seed = random_seed
   )
