@@ -23,6 +23,11 @@
 #'   to NULL, letting monocle3 determine resolution automatically from k;
 #'   set this explicitly only if you need to override that.
 #' @param random_seed Random seed for reproducibility.
+#' @param roi_table Optional rectangular ROI table used to create a smaller
+#'   ROI-only CDS before preprocessing. See \code{subset_xenium_rois()}.
+#' @param roi_id_col Optional ROI ID column in \code{roi_table}.
+#' @param roi_sample_col Sample column in \code{roi_table}.
+#' @param x_min_col,x_max_col,y_min_col,y_max_col ROI bound columns in microns.
 #'
 #' @return A processed monocle3 cell_data_set containing all samples.
 #'
@@ -36,7 +41,14 @@ build_xenium_cds <- function(
     num_dim          = 50,
     k                = 20,
     cluster_res      = NULL,
-    random_seed      = 12345
+    random_seed      = 12345,
+    roi_table        = NULL,
+    roi_id_col       = NULL,
+    roi_sample_col   = "sample",
+    x_min_col        = "x_min",
+    x_max_col        = "x_max",
+    y_min_col        = "y_min",
+    y_max_col        = "y_max"
 ) {
 
   required_cols <- c(
@@ -197,6 +209,24 @@ build_xenium_cds <- function(
         nucleus_area > min_nucleus_area &
         nucleus_area < max_nucleus_area
     ]
+  }
+
+  ## ------------------------------------------------------------
+  ## Optional ROI-only subsetting before expensive preprocessing
+  ## ------------------------------------------------------------
+  if (!is.null(roi_table)) {
+    cds <- subset_xenium_rois(
+      cds = cds,
+      roi_table = roi_table,
+      roi_id_col = roi_id_col,
+      roi_sample_col = roi_sample_col,
+      cds_sample_col = "sample",
+      x_min_col = x_min_col,
+      x_max_col = x_max_col,
+      y_min_col = y_min_col,
+      y_max_col = y_max_col,
+      keep_unassigned = FALSE
+    )
   }
 
   ## ------------------------------------------------------------
