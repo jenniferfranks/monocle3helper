@@ -13,7 +13,14 @@ build_xenium_cds(
   num_dim = 50,
   k = 20,
   cluster_res = NULL,
-  random_seed = 12345
+  random_seed = 12345,
+  roi_table = NULL,
+  roi_id_col = NULL,
+  roi_sample_col = "sample",
+  x_min_col = "x_min",
+  x_max_col = "x_max",
+  y_min_col = "y_min",
+  y_max_col = "y_max"
 )
 }
 \arguments{
@@ -40,6 +47,15 @@ to NULL, letting monocle3 determine resolution automatically from k;
 set this explicitly only if you need to override that.}
 
 \item{random_seed}{Random seed for reproducibility.}
+
+\item{roi_table}{Optional rectangular ROI table used to create a smaller
+ROI-only CDS before preprocessing. See \code{subset_xenium_rois()}.}
+
+\item{roi_id_col}{Optional ROI ID column in \code{roi_table}.}
+
+\item{roi_sample_col}{Sample column in \code{roi_table}.}
+
+\item{x_min_col, x_max_col, y_min_col, y_max_col}{ROI bound columns in microns.}
 }
 \value{
 A processed monocle3 cell_data_set containing all samples.
