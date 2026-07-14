@@ -12,6 +12,7 @@ derive_xenium_roi_table(
   n_rois_per_sample = 1,
   target_fraction = NULL,
   allow_overlap = FALSE,
+  max_cell_imbalance = 0.25,
   roi_id_prefix = "roi"
 )
 }
@@ -41,13 +42,16 @@ to \code{FALSE}. Non-overlapping ROIs may be smaller than requested if
 \code{target_fraction} and \code{n_rois_per_sample} cannot fit inside
 the sample extent without overlap.}
 
+\item{max_cell_imbalance}{Maximum tolerated fractional imbalance in
+actual ROI cell counts within each sample before a warning is emitted.}
+
 \item{roi_id_prefix}{Prefix for generated ROI IDs.}
 }
 \value{
 A data.frame with columns \code{sample}, \code{roi_id},
 \code{x_min}, \code{x_max}, \code{y_min}, \code{y_max},
-\code{target_fraction}, \code{actual_fraction}, and \code{n_cells}
-when cell counts are available.
+\code{target_fraction}, \code{actual_fraction}, \code{n_cells}, and
+\code{n_cells_in_roi} when cell counts are available.
 }
 \description{
 Automatically creates suggested rectangular ROIs per sample using the same

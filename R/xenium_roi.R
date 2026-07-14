@@ -132,12 +132,14 @@ subset_xenium_rois <- function(
 #'   to \code{FALSE}. Non-overlapping ROIs may be smaller than requested if
 #'   \code{target_fraction} and \code{n_rois_per_sample} cannot fit inside
 #'   the sample extent without overlap.
+#' @param max_cell_imbalance Maximum tolerated fractional imbalance in
+#'   actual ROI cell counts within each sample before a warning is emitted.
 #' @param roi_id_prefix Prefix for generated ROI IDs.
 #'
 #' @return A data.frame with columns \code{sample}, \code{roi_id},
 #'   \code{x_min}, \code{x_max}, \code{y_min}, \code{y_max},
-#'   \code{target_fraction}, \code{actual_fraction}, and \code{n_cells}
-#'   when cell counts are available.
+#'   \code{target_fraction}, \code{actual_fraction}, \code{n_cells}, and
+#'   \code{n_cells_in_roi} when cell counts are available.
 #'
 #' @export
 derive_xenium_roi_table <- function(
@@ -148,6 +150,7 @@ derive_xenium_roi_table <- function(
     n_rois_per_sample = 1,
     target_fraction = NULL,
     allow_overlap = FALSE,
+    max_cell_imbalance = 0.25,
     roi_id_prefix = "roi"
 ) {
 
@@ -161,6 +164,9 @@ derive_xenium_roi_table <- function(
   }
   if (length(target_fraction) != 1 || target_fraction <= 0 || target_fraction > 1) {
     stop("target_fraction must be > 0 and <= 1.")
+  }
+  if (length(max_cell_imbalance) != 1 || max_cell_imbalance < 0) {
+    stop("max_cell_imbalance must be a non-negative number.")
   }
 
   make_rois <- function(bounds, sample_id, sample_index, n_cells = NA_integer_) {
@@ -215,6 +221,138 @@ derive_xenium_roi_table <- function(
         stringsAsFactors = FALSE
       )
     }
+    do.call(rbind, rows)
+  }
+
+  make_cell_balanced_rois <- function(df_samp, sample_id, sample_index) {
+    df_samp <- df_samp[
+      is.finite(df_samp$x_centroid) & is.finite(df_samp$y_centroid),
+      ,
+      drop = FALSE
+    ]
+    n_sample_cells <- nrow(df_samp)
+    if (n_sample_cells < n_rois_per_sample) {
+      stop(
+        "Sample ", sample_id, " has ", n_sample_cells,
+        " cells with finite centroids, fewer than n_rois_per_sample = ",
+        n_rois_per_sample, ". Reduce n_rois_per_sample."
+      )
+    }
+
+    total_target_cells <- max(
+      n_rois_per_sample,
+      min(n_sample_cells, round(n_sample_cells * target_fraction))
+    )
+    base_cells <- total_target_cells %/% n_rois_per_sample
+    extra_cells <- total_target_cells %% n_rois_per_sample
+    target_counts <- rep(base_cells, n_rois_per_sample)
+    if (extra_cells > 0) {
+      target_counts[seq_len(extra_cells)] <- target_counts[seq_len(extra_cells)] + 1
+    }
+
+    ord <- order(df_samp$x_centroid, df_samp$y_centroid)
+    df_sorted <- df_samp[ord, , drop = FALSE]
+    bin_breaks <- round(seq(0, n_sample_cells, length.out = n_rois_per_sample + 1))
+
+    bounds <- list(
+      x_min = min(df_samp$x_centroid, na.rm = TRUE),
+      x_max = max(df_samp$x_centroid, na.rm = TRUE),
+      y_min = min(df_samp$y_centroid, na.rm = TRUE),
+      y_max = max(df_samp$y_centroid, na.rm = TRUE)
+    )
+    full_area <- (bounds$x_max - bounds$x_min) * (bounds$y_max - bounds$y_min)
+
+    rows <- vector("list", n_rois_per_sample)
+    actual_counts <- integer(n_rois_per_sample)
+
+    for (j in seq_len(n_rois_per_sample)) {
+      bin_start <- bin_breaks[j] + 1
+      bin_end <- bin_breaks[j + 1]
+      bin_index <- bin_start:bin_end
+      bin_index <- bin_index[bin_index >= 1 & bin_index <= n_sample_cells]
+      if (length(bin_index) == 0) {
+        stop("Internal ROI binning produced an empty bin for sample: ", sample_id)
+      }
+
+      if (allow_overlap) {
+        target_n <- target_counts[j]
+        center_pos <- round(stats::quantile(
+          seq_len(n_sample_cells),
+          probs = j / (n_rois_per_sample + 1),
+          names = FALSE
+        ))
+        start_pos <- max(1, center_pos - floor((target_n - 1) / 2))
+        end_pos <- start_pos + target_n - 1
+        if (end_pos > n_sample_cells) {
+          end_pos <- n_sample_cells
+          start_pos <- end_pos - target_n + 1
+        }
+      } else {
+        target_n <- min(target_counts[j], length(bin_index))
+        center_pos <- floor(stats::median(bin_index))
+        start_pos <- max(min(bin_index), center_pos - floor((target_n - 1) / 2))
+        end_pos <- start_pos + target_n - 1
+        if (end_pos > max(bin_index)) {
+          end_pos <- max(bin_index)
+          start_pos <- end_pos - target_n + 1
+        }
+      }
+      selected <- df_sorted[start_pos:end_pos, , drop = FALSE]
+
+      x_min <- min(selected$x_centroid, na.rm = TRUE)
+      x_max <- max(selected$x_centroid, na.rm = TRUE)
+      y_min <- min(selected$y_centroid, na.rm = TRUE)
+      y_max <- max(selected$y_centroid, na.rm = TRUE)
+
+      # Give one-cell-wide ROIs a tiny data-derived width/height so downstream
+      # inclusive bound checks retain the selected cell without extending
+      # outside the sample extent.
+      if (x_min == x_max) {
+        eps_x <- max((bounds$x_max - bounds$x_min) * 1e-6, .Machine$double.eps)
+        x_min <- max(bounds$x_min, x_min - eps_x)
+        x_max <- min(bounds$x_max, x_max + eps_x)
+      }
+      if (y_min == y_max) {
+        eps_y <- max((bounds$y_max - bounds$y_min) * 1e-6, .Machine$double.eps)
+        y_min <- max(bounds$y_min, y_min - eps_y)
+        y_max <- min(bounds$y_max, y_max + eps_y)
+      }
+
+      actual_counts[j] <- sum(
+        df_samp$x_centroid >= x_min & df_samp$x_centroid <= x_max &
+          df_samp$y_centroid >= y_min & df_samp$y_centroid <= y_max,
+        na.rm = TRUE
+      )
+
+      rows[[j]] <- data.frame(
+        sample = sample_id,
+        roi_id = paste0(roi_id_prefix, "_", sample_index, "_", j),
+        x_min = x_min,
+        x_max = x_max,
+        y_min = y_min,
+        y_max = y_max,
+        target_fraction = target_fraction,
+        actual_fraction = ((x_max - x_min) * (y_max - y_min)) / full_area,
+        n_cells = n_sample_cells,
+        n_cells_in_roi = actual_counts[j],
+        stringsAsFactors = FALSE
+      )
+    }
+
+    if (any(actual_counts == 0)) {
+      stop("At least one suggested ROI contains zero cells for sample: ", sample_id)
+    }
+
+    mean_count <- mean(actual_counts)
+    if (mean_count > 0 && any(abs(actual_counts - mean_count) / mean_count > max_cell_imbalance)) {
+      warning(
+        "Suggested ROI cell counts vary by more than ",
+        max_cell_imbalance * 100,
+        "% for sample ", sample_id,
+        ". Inspect n_cells_in_roi and adjust n_rois_per_sample or target_fraction."
+      )
+    }
+
     do.call(rbind, rows)
   }
 
@@ -282,23 +420,7 @@ derive_xenium_roi_table <- function(
   roi_rows <- lapply(seq_along(samples), function(i) {
     sample_id <- samples[i]
     df_samp <- cd[cd$.sample == sample_id, , drop = FALSE]
-    bounds <- list(
-      x_min = min(df_samp$x_centroid, na.rm = TRUE),
-      x_max = max(df_samp$x_centroid, na.rm = TRUE),
-      y_min = min(df_samp$y_centroid, na.rm = TRUE),
-      y_max = max(df_samp$y_centroid, na.rm = TRUE)
-    )
-    rois <- make_rois(bounds, sample_id, i, nrow(df_samp))
-    rois$n_cells_in_roi <- vapply(seq_len(nrow(rois)), function(j) {
-      sum(
-        df_samp$x_centroid >= rois$x_min[j] &
-          df_samp$x_centroid <= rois$x_max[j] &
-          df_samp$y_centroid >= rois$y_min[j] &
-          df_samp$y_centroid <= rois$y_max[j],
-        na.rm = TRUE
-      )
-    }, integer(1))
-    rois
+    make_cell_balanced_rois(df_samp, sample_id, i)
   })
 
   roi_table <- do.call(rbind, roi_rows)
