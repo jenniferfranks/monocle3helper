@@ -2,14 +2,16 @@
 % Please edit documentation in R/xenium_roi.R
 \name{derive_xenium_roi_table}
 \alias{derive_xenium_roi_table}
-\title{Derive a rectangular Xenium ROI table from existing data}
+\title{Derive rectangular Xenium ROI tables from existing data}
 \usage{
 derive_xenium_roi_table(
   cds = NULL,
   sample_table = NULL,
   images = NULL,
   sample_col = "sample",
-  buffer_um = 0,
+  n_rois_per_sample = 1,
+  target_fraction = NULL,
+  allow_overlap = FALSE,
   roi_id_prefix = "roi"
 )
 }
@@ -28,21 +30,35 @@ image pixels back into microns using \code{effective_pixel_size_um}.}
 
 \item{sample_col}{Column in \code{colData(cds)} containing sample IDs.}
 
-\item{buffer_um}{Extra micron buffer to add around centroid-derived ROIs.
-Ignored when \code{images} is supplied because image extents already
-include the image buffer used by \code{build_xenium_images()}.}
+\item{n_rois_per_sample}{Number of ROIs to suggest for each sample.}
+
+\item{target_fraction}{Approximate fraction of each sample's observed
+extent to retain across all ROIs. If \code{NULL}, defaults to 1 for a
+single ROI per sample and 0.1 for multiple ROIs per sample.}
+
+\item{allow_overlap}{Logical; whether suggested ROIs may overlap. Defaults
+to \code{FALSE}. Non-overlapping ROIs may be smaller than requested if
+\code{target_fraction} and \code{n_rois_per_sample} cannot fit inside
+the sample extent without overlap.}
 
 \item{roi_id_prefix}{Prefix for generated ROI IDs.}
 }
 \value{
 A data.frame with columns \code{sample}, \code{roi_id},
-\code{x_min}, \code{x_max}, \code{y_min}, \code{y_max}, and
-\code{n_cells} when cell counts are available.
+\code{x_min}, \code{x_max}, \code{y_min}, \code{y_max},
+\code{target_fraction}, \code{actual_fraction}, and \code{n_cells}
+when cell counts are available.
 }
 \description{
-Automatically creates one rectangular ROI per sample using the same
+Automatically creates suggested rectangular ROIs per sample using the same
 centroid-range strategy used by \code{build_xenium_images()} to define
 cell-focused image extents. ROIs can be derived from an existing CDS,
 directly from \code{sample_table$cells_csv}, or from the \code{images}
 object returned by \code{build_xenium_images()}.
+}
+\details{
+When \code{n_rois_per_sample > 1}, the function suggests smaller ROIs by
+placing rectangles inside each sample's observed cell/image extent. Set
+\code{target_fraction} to the approximate fraction of each sample extent
+that should be retained across all ROIs. By default ROIs do not overlap.
 }

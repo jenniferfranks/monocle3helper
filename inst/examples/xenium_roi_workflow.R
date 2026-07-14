@@ -54,16 +54,18 @@ sample_table <- discover_xenium_sample_table(
 print(sample_table)
 
 ## -------------------------------------------------------------------------
-## Automatically derive one ROI per sample
+## Automatically derive smaller ROIs per sample
 ## -------------------------------------------------------------------------
 
 # This reads each cells.csv.gz listed in sample_table and computes a rectangular
 # ROI around the observed Xenium cell centroids, using the same centroid-range
 # idea that build_xenium_images() uses for its cell-focused image crop.
-# Increase buffer_um if you want extra space around the cells.
+# This example keeps about 10% of each sample extent across 5 non-overlapping ROIs.
 roi_table <- derive_xenium_roi_table(
   sample_table = sample_table,
-  buffer_um = 100,
+  n_rois_per_sample = 5,
+  target_fraction = 0.1,
+  allow_overlap = FALSE,
   roi_id_prefix = "auto_roi"
 )
 

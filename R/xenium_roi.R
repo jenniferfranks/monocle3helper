@@ -101,13 +101,18 @@ subset_xenium_rois <- function(
   cds_roi
 }
 
-#' Derive a rectangular Xenium ROI table from existing data
+#' Derive rectangular Xenium ROI tables from existing data
 #'
-#' Automatically creates one rectangular ROI per sample using the same
+#' Automatically creates suggested rectangular ROIs per sample using the same
 #' centroid-range strategy used by \code{build_xenium_images()} to define
 #' cell-focused image extents. ROIs can be derived from an existing CDS,
 #' directly from \code{sample_table$cells_csv}, or from the \code{images}
 #' object returned by \code{build_xenium_images()}.
+#'
+#' When \code{n_rois_per_sample > 1}, the function suggests smaller ROIs by
+#' placing rectangles inside each sample's observed cell/image extent. Set
+#' \code{target_fraction} to the approximate fraction of each sample extent
+#' that should be retained across all ROIs. By default ROIs do not overlap.
 #'
 #' @param cds Optional monocle3 cell_data_set with \code{x_centroid},
 #'   \code{y_centroid}, and a sample column in \code{colData}.
@@ -119,14 +124,20 @@ subset_xenium_rois <- function(
 #'   When supplied, \code{cells_xlim}/\code{cells_ylim} are converted from
 #'   image pixels back into microns using \code{effective_pixel_size_um}.
 #' @param sample_col Column in \code{colData(cds)} containing sample IDs.
-#' @param buffer_um Extra micron buffer to add around centroid-derived ROIs.
-#'   Ignored when \code{images} is supplied because image extents already
-#'   include the image buffer used by \code{build_xenium_images()}.
+#' @param n_rois_per_sample Number of ROIs to suggest for each sample.
+#' @param target_fraction Approximate fraction of each sample's observed
+#'   extent to retain across all ROIs. If \code{NULL}, defaults to 1 for a
+#'   single ROI per sample and 0.1 for multiple ROIs per sample.
+#' @param allow_overlap Logical; whether suggested ROIs may overlap. Defaults
+#'   to \code{FALSE}. Non-overlapping ROIs may be smaller than requested if
+#'   \code{target_fraction} and \code{n_rois_per_sample} cannot fit inside
+#'   the sample extent without overlap.
 #' @param roi_id_prefix Prefix for generated ROI IDs.
 #'
 #' @return A data.frame with columns \code{sample}, \code{roi_id},
-#'   \code{x_min}, \code{x_max}, \code{y_min}, \code{y_max}, and
-#'   \code{n_cells} when cell counts are available.
+#'   \code{x_min}, \code{x_max}, \code{y_min}, \code{y_max},
+#'   \code{target_fraction}, \code{actual_fraction}, and \code{n_cells}
+#'   when cell counts are available.
 #'
 #' @export
 derive_xenium_roi_table <- function(
@@ -134,9 +145,78 @@ derive_xenium_roi_table <- function(
     sample_table = NULL,
     images = NULL,
     sample_col = "sample",
-    buffer_um = 0,
+    n_rois_per_sample = 1,
+    target_fraction = NULL,
+    allow_overlap = FALSE,
     roi_id_prefix = "roi"
 ) {
+
+  if (length(n_rois_per_sample) != 1 || n_rois_per_sample < 1) {
+    stop("n_rois_per_sample must be a positive integer.")
+  }
+  n_rois_per_sample <- as.integer(n_rois_per_sample)
+
+  if (is.null(target_fraction)) {
+    target_fraction <- if (n_rois_per_sample == 1) 1 else 0.1
+  }
+  if (length(target_fraction) != 1 || target_fraction <= 0 || target_fraction > 1) {
+    stop("target_fraction must be > 0 and <= 1.")
+  }
+
+  make_rois <- function(bounds, sample_id, sample_index, n_cells = NA_integer_) {
+    full_width <- bounds$x_max - bounds$x_min
+    full_height <- bounds$y_max - bounds$y_min
+    if (!is.finite(full_width) || !is.finite(full_height) ||
+        full_width <= 0 || full_height <= 0) {
+      stop("Cannot derive ROI bounds for sample with invalid extent: ", sample_id)
+    }
+
+    full_area <- full_width * full_height
+    roi_area <- full_area * target_fraction / n_rois_per_sample
+    aspect <- full_width / full_height
+    roi_width <- sqrt(roi_area * aspect)
+    roi_height <- sqrt(roi_area / aspect)
+
+    grid_cols <- ceiling(sqrt(n_rois_per_sample * aspect))
+    grid_rows <- ceiling(n_rois_per_sample / grid_cols)
+    cell_width <- full_width / grid_cols
+    cell_height <- full_height / grid_rows
+
+    if (!allow_overlap) {
+      roi_width <- min(roi_width, cell_width)
+      roi_height <- min(roi_height, cell_height)
+    } else {
+      roi_width <- min(roi_width, full_width)
+      roi_height <- min(roi_height, full_height)
+    }
+
+    rows <- vector("list", n_rois_per_sample)
+    for (j in seq_len(n_rois_per_sample)) {
+      grid_col <- ((j - 1) %% grid_cols) + 1
+      grid_row <- floor((j - 1) / grid_cols) + 1
+      center_x <- bounds$x_min + (grid_col - 0.5) * cell_width
+      center_y <- bounds$y_min + (grid_row - 0.5) * cell_height
+
+      x_min <- max(bounds$x_min, center_x - roi_width / 2)
+      x_max <- min(bounds$x_max, center_x + roi_width / 2)
+      y_min <- max(bounds$y_min, center_y - roi_height / 2)
+      y_max <- min(bounds$y_max, center_y + roi_height / 2)
+
+      rows[[j]] <- data.frame(
+        sample = sample_id,
+        roi_id = paste0(roi_id_prefix, "_", sample_index, "_", j),
+        x_min = x_min,
+        x_max = x_max,
+        y_min = y_min,
+        y_max = y_max,
+        target_fraction = target_fraction,
+        actual_fraction = ((x_max - x_min) * (y_max - y_min)) / full_area,
+        n_cells = n_cells,
+        stringsAsFactors = FALSE
+      )
+    }
+    do.call(rbind, rows)
+  }
 
   if (!is.null(images)) {
     if (is.null(images$images) || is.null(images$effective_pixel_size_um)) {
@@ -151,16 +231,13 @@ derive_xenium_roi_table <- function(
       if (is.null(img$cells_xlim) || is.null(img$cells_ylim)) {
         stop("images$images entries must contain cells_xlim and cells_ylim.")
       }
-      data.frame(
-        sample = sample_id,
-        roi_id = paste0(roi_id_prefix, "_", i),
+      bounds <- list(
         x_min = min(img$cells_xlim) * effective_pixel_size,
         x_max = max(img$cells_xlim) * effective_pixel_size,
         y_min = min(img$cells_ylim) * effective_pixel_size,
-        y_max = max(img$cells_ylim) * effective_pixel_size,
-        n_cells = NA_integer_,
-        stringsAsFactors = FALSE
+        y_max = max(img$cells_ylim) * effective_pixel_size
       )
+      make_rois(bounds, sample_id, i)
     })
 
     return(do.call(rbind, roi_rows))
@@ -205,16 +282,23 @@ derive_xenium_roi_table <- function(
   roi_rows <- lapply(seq_along(samples), function(i) {
     sample_id <- samples[i]
     df_samp <- cd[cd$.sample == sample_id, , drop = FALSE]
-    data.frame(
-      sample = sample_id,
-      roi_id = paste0(roi_id_prefix, "_", i),
-      x_min = min(df_samp$x_centroid, na.rm = TRUE) - buffer_um,
-      x_max = max(df_samp$x_centroid, na.rm = TRUE) + buffer_um,
-      y_min = min(df_samp$y_centroid, na.rm = TRUE) - buffer_um,
-      y_max = max(df_samp$y_centroid, na.rm = TRUE) + buffer_um,
-      n_cells = nrow(df_samp),
-      stringsAsFactors = FALSE
+    bounds <- list(
+      x_min = min(df_samp$x_centroid, na.rm = TRUE),
+      x_max = max(df_samp$x_centroid, na.rm = TRUE),
+      y_min = min(df_samp$y_centroid, na.rm = TRUE),
+      y_max = max(df_samp$y_centroid, na.rm = TRUE)
     )
+    rois <- make_rois(bounds, sample_id, i, nrow(df_samp))
+    rois$n_cells_in_roi <- vapply(seq_len(nrow(rois)), function(j) {
+      sum(
+        df_samp$x_centroid >= rois$x_min[j] &
+          df_samp$x_centroid <= rois$x_max[j] &
+          df_samp$y_centroid >= rois$y_min[j] &
+          df_samp$y_centroid <= rois$y_max[j],
+        na.rm = TRUE
+      )
+    }, integer(1))
+    rois
   })
 
   roi_table <- do.call(rbind, roi_rows)
