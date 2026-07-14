@@ -27,3 +27,4 @@ export(score_gene_sets)
 export(transfer_cell_annotations)
 
 export(subset_xenium_rois)
+export(derive_xenium_roi_table)

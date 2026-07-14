@@ -100,3 +100,137 @@ subset_xenium_rois <- function(
 
   cds_roi
 }
+
+#' Derive a rectangular Xenium ROI table from existing data
+#'
+#' Automatically creates one rectangular ROI per sample using the same
+#' centroid-range strategy used by \code{build_xenium_images()} to define
+#' cell-focused image extents. ROIs can be derived from an existing CDS,
+#' directly from \code{sample_table$cells_csv}, or from the \code{images}
+#' object returned by \code{build_xenium_images()}.
+#'
+#' @param cds Optional monocle3 cell_data_set with \code{x_centroid},
+#'   \code{y_centroid}, and a sample column in \code{colData}.
+#' @param sample_table Optional sample table produced by
+#'   \code{discover_xenium_sample_table()}. If \code{cds} is \code{NULL},
+#'   this is used to read each \code{cells_csv} and derive sample bounds
+#'   without building a full CDS first.
+#' @param images Optional object returned by \code{build_xenium_images()}.
+#'   When supplied, \code{cells_xlim}/\code{cells_ylim} are converted from
+#'   image pixels back into microns using \code{effective_pixel_size_um}.
+#' @param sample_col Column in \code{colData(cds)} containing sample IDs.
+#' @param buffer_um Extra micron buffer to add around centroid-derived ROIs.
+#'   Ignored when \code{images} is supplied because image extents already
+#'   include the image buffer used by \code{build_xenium_images()}.
+#' @param roi_id_prefix Prefix for generated ROI IDs.
+#'
+#' @return A data.frame with columns \code{sample}, \code{roi_id},
+#'   \code{x_min}, \code{x_max}, \code{y_min}, \code{y_max}, and
+#'   \code{n_cells} when cell counts are available.
+#'
+#' @export
+derive_xenium_roi_table <- function(
+    cds = NULL,
+    sample_table = NULL,
+    images = NULL,
+    sample_col = "sample",
+    buffer_um = 0,
+    roi_id_prefix = "roi"
+) {
+
+  if (!is.null(images)) {
+    if (is.null(images$images) || is.null(images$effective_pixel_size_um)) {
+      stop("images must be an object returned by build_xenium_images().")
+    }
+
+    effective_pixel_size <- images$effective_pixel_size_um
+    image_names <- names(images$images)
+    roi_rows <- lapply(seq_along(image_names), function(i) {
+      sample_id <- image_names[i]
+      img <- images$images[[sample_id]]
+      if (is.null(img$cells_xlim) || is.null(img$cells_ylim)) {
+        stop("images$images entries must contain cells_xlim and cells_ylim.")
+      }
+      data.frame(
+        sample = sample_id,
+        roi_id = paste0(roi_id_prefix, "_", i),
+        x_min = min(img$cells_xlim) * effective_pixel_size,
+        x_max = max(img$cells_xlim) * effective_pixel_size,
+        y_min = min(img$cells_ylim) * effective_pixel_size,
+        y_max = max(img$cells_ylim) * effective_pixel_size,
+        n_cells = NA_integer_,
+        stringsAsFactors = FALSE
+      )
+    })
+
+    return(do.call(rbind, roi_rows))
+  }
+
+  if (!is.null(cds)) {
+    cd <- as.data.frame(SummarizedExperiment::colData(cds))
+    required_cd <- c("x_centroid", "y_centroid", sample_col)
+    missing_cd <- setdiff(required_cd, colnames(cd))
+    if (length(missing_cd) > 0) {
+      stop(
+        "cds is missing required colData columns: ",
+        paste(missing_cd, collapse = ", ")
+      )
+    }
+    cd$.sample <- as.character(cd[[sample_col]])
+  } else if (!is.null(sample_table)) {
+    required_sample <- c("sample_id", "cells_csv", "barcode_suffix")
+    missing_sample <- setdiff(required_sample, colnames(sample_table))
+    if (length(missing_sample) > 0) {
+      stop(
+        "sample_table is missing required columns: ",
+        paste(missing_sample, collapse = ", ")
+      )
+    }
+
+    cell_meta <- vector("list", nrow(sample_table))
+    for (i in seq_len(nrow(sample_table))) {
+      cell_meta[[i]] <- read_xenium_cells(
+        cells_csv = sample_table$cells_csv[i],
+        barcode_suffix = sample_table$barcode_suffix[i],
+        sample_id = sample_table$sample_id[i]
+      )
+    }
+    cd <- dplyr::bind_rows(cell_meta)
+    cd$.sample <- as.character(cd$sample)
+  } else {
+    stop("Provide cds, sample_table, or images to derive ROI bounds.")
+  }
+
+  samples <- unique(cd$.sample)
+  roi_rows <- lapply(seq_along(samples), function(i) {
+    sample_id <- samples[i]
+    df_samp <- cd[cd$.sample == sample_id, , drop = FALSE]
+    data.frame(
+      sample = sample_id,
+      roi_id = paste0(roi_id_prefix, "_", i),
+      x_min = min(df_samp$x_centroid, na.rm = TRUE) - buffer_um,
+      x_max = max(df_samp$x_centroid, na.rm = TRUE) + buffer_um,
+      y_min = min(df_samp$y_centroid, na.rm = TRUE) - buffer_um,
+      y_max = max(df_samp$y_centroid, na.rm = TRUE) + buffer_um,
+      n_cells = nrow(df_samp),
+      stringsAsFactors = FALSE
+    )
+  })
+
+  roi_table <- do.call(rbind, roi_rows)
+
+  if (!is.null(sample_table)) {
+    sample_cols <- intersect(
+      c("sample_id", "sample_label", "sample_group"),
+      colnames(sample_table)
+    )
+    sample_info <- unique(as.data.frame(sample_table[sample_cols]))
+    roi_table <- dplyr::left_join(
+      roi_table,
+      sample_info,
+      by = c("sample" = "sample_id")
+    )
+  }
+
+  roi_table
+}
