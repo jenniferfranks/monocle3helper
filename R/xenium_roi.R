@@ -128,6 +128,11 @@ subset_xenium_rois <- function(
 #' @param target_fraction Approximate fraction of each sample's observed
 #'   extent to retain across all ROIs. If \code{NULL}, defaults to 1 for a
 #'   single ROI per sample and 0.1 for multiple ROIs per sample.
+#' @param selection ROI placement strategy. \code{"balanced"} places ROIs
+#'   deterministically across the sample; \code{"random"} randomly places
+#'   ROIs while preserving the requested target cell counts when cell
+#'   coordinates are available.
+#' @param random_seed Optional seed used when \code{selection = "random"}.
 #' @param allow_overlap Logical; whether suggested ROIs may overlap. Defaults
 #'   to \code{FALSE}. Non-overlapping ROIs may be smaller than requested if
 #'   \code{target_fraction} and \code{n_rois_per_sample} cannot fit inside
@@ -149,10 +154,30 @@ derive_xenium_roi_table <- function(
     sample_col = "sample",
     n_rois_per_sample = 1,
     target_fraction = NULL,
+    selection = c("balanced", "random"),
+    random_seed = NULL,
     allow_overlap = FALSE,
     max_cell_imbalance = 0.25,
     roi_id_prefix = "roi"
 ) {
+
+  selection <- match.arg(selection)
+
+  if (!is.null(random_seed)) {
+    old_seed <- if (exists(".Random.seed", envir = .GlobalEnv)) {
+      get(".Random.seed", envir = .GlobalEnv)
+    } else {
+      NULL
+    }
+    on.exit({
+      if (is.null(old_seed)) {
+        rm(".Random.seed", envir = .GlobalEnv)
+      } else {
+        assign(".Random.seed", old_seed, envir = .GlobalEnv)
+      }
+    }, add = TRUE)
+    set.seed(random_seed)
+  }
 
   if (length(n_rois_per_sample) != 1 || n_rois_per_sample < 1) {
     stop("n_rois_per_sample must be a positive integer.")
@@ -200,8 +225,23 @@ derive_xenium_roi_table <- function(
     for (j in seq_len(n_rois_per_sample)) {
       grid_col <- ((j - 1) %% grid_cols) + 1
       grid_row <- floor((j - 1) / grid_cols) + 1
-      center_x <- bounds$x_min + (grid_col - 0.5) * cell_width
-      center_y <- bounds$y_min + (grid_row - 0.5) * cell_height
+
+      if (selection == "random") {
+        if (allow_overlap) {
+          center_x <- stats::runif(1, bounds$x_min + roi_width / 2, bounds$x_max - roi_width / 2)
+          center_y <- stats::runif(1, bounds$y_min + roi_height / 2, bounds$y_max - roi_height / 2)
+        } else {
+          cell_x_min <- bounds$x_min + (grid_col - 1) * cell_width
+          cell_x_max <- bounds$x_min + grid_col * cell_width
+          cell_y_min <- bounds$y_min + (grid_row - 1) * cell_height
+          cell_y_max <- bounds$y_min + grid_row * cell_height
+          center_x <- stats::runif(1, cell_x_min + roi_width / 2, cell_x_max - roi_width / 2)
+          center_y <- stats::runif(1, cell_y_min + roi_height / 2, cell_y_max - roi_height / 2)
+        }
+      } else {
+        center_x <- bounds$x_min + (grid_col - 0.5) * cell_width
+        center_y <- bounds$y_min + (grid_row - 0.5) * cell_height
+      }
 
       x_min <- max(bounds$x_min, center_x - roi_width / 2)
       x_max <- min(bounds$x_max, center_x + roi_width / 2)
@@ -276,25 +316,36 @@ derive_xenium_roi_table <- function(
 
       if (allow_overlap) {
         target_n <- target_counts[j]
-        center_pos <- round(stats::quantile(
-          seq_len(n_sample_cells),
-          probs = j / (n_rois_per_sample + 1),
-          names = FALSE
-        ))
-        start_pos <- max(1, center_pos - floor((target_n - 1) / 2))
-        end_pos <- start_pos + target_n - 1
-        if (end_pos > n_sample_cells) {
-          end_pos <- n_sample_cells
-          start_pos <- end_pos - target_n + 1
+        if (selection == "random") {
+          start_pos <- sample.int(n_sample_cells - target_n + 1, 1)
+          end_pos <- start_pos + target_n - 1
+        } else {
+          center_pos <- round(stats::quantile(
+            seq_len(n_sample_cells),
+            probs = j / (n_rois_per_sample + 1),
+            names = FALSE
+          ))
+          start_pos <- max(1, center_pos - floor((target_n - 1) / 2))
+          end_pos <- start_pos + target_n - 1
+          if (end_pos > n_sample_cells) {
+            end_pos <- n_sample_cells
+            start_pos <- end_pos - target_n + 1
+          }
         }
       } else {
         target_n <- min(target_counts[j], length(bin_index))
-        center_pos <- floor(stats::median(bin_index))
-        start_pos <- max(min(bin_index), center_pos - floor((target_n - 1) / 2))
-        end_pos <- start_pos + target_n - 1
-        if (end_pos > max(bin_index)) {
-          end_pos <- max(bin_index)
-          start_pos <- end_pos - target_n + 1
+        if (selection == "random") {
+          start_candidates <- seq(min(bin_index), max(bin_index) - target_n + 1)
+          start_pos <- sample(start_candidates, 1)
+          end_pos <- start_pos + target_n - 1
+        } else {
+          center_pos <- floor(stats::median(bin_index))
+          start_pos <- max(min(bin_index), center_pos - floor((target_n - 1) / 2))
+          end_pos <- start_pos + target_n - 1
+          if (end_pos > max(bin_index)) {
+            end_pos <- max(bin_index)
+            start_pos <- end_pos - target_n + 1
+          }
         }
       }
       selected <- df_sorted[start_pos:end_pos, , drop = FALSE]

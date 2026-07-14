@@ -11,6 +11,8 @@ derive_xenium_roi_table(
   sample_col = "sample",
   n_rois_per_sample = 1,
   target_fraction = NULL,
+  selection = c("balanced", "random"),
+  random_seed = NULL,
   allow_overlap = FALSE,
   max_cell_imbalance = 0.25,
   roi_id_prefix = "roi"
@@ -36,6 +38,13 @@ image pixels back into microns using \code{effective_pixel_size_um}.}
 \item{target_fraction}{Approximate fraction of each sample's observed
 extent to retain across all ROIs. If \code{NULL}, defaults to 1 for a
 single ROI per sample and 0.1 for multiple ROIs per sample.}
+
+\item{selection}{ROI placement strategy. \code{"balanced"} places ROIs
+deterministically across the sample; \code{"random"} randomly places
+ROIs while preserving the requested target cell counts when cell
+coordinates are available.}
+
+\item{random_seed}{Optional seed used when \code{selection = "random"}.}
 
 \item{allow_overlap}{Logical; whether suggested ROIs may overlap. Defaults
 to \code{FALSE}. Non-overlapping ROIs may be smaller than requested if
@@ -64,5 +73,6 @@ object returned by \code{build_xenium_images()}.
 When \code{n_rois_per_sample > 1}, the function suggests smaller ROIs by
 placing rectangles inside each sample's observed cell/image extent. Set
 \code{target_fraction} to the approximate fraction of each sample extent
-that should be retained across all ROIs. By default ROIs do not overlap.
+that should be retained across all ROIs. By default ROIs do not overlap. Use \code{selection = "random"} with
+\code{random_seed} to generate reproducible random ROI suggestions.
 }
