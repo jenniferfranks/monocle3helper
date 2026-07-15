@@ -60,6 +60,7 @@ test_that("xenium proximity can stratify by ROI and exclude same-type links", {
   )
 
   expect_true("roi_id" %in% colnames(proximity$pairwise))
+  expect_true("stratum" %in% colnames(proximity$by_stratum))
   expect_false(any(proximity$cell_neighbors$focal_cell_type == proximity$cell_neighbors$neighbor_cell_type))
 })
 

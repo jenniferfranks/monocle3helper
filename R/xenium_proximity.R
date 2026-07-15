@@ -78,6 +78,7 @@ analyze_xenium_cell_proximity <- function(
   cd$.x <- as.numeric(cd[[x_col]])
   cd$.y <- as.numeric(cd[[y_col]])
   cd$.stratum <- make_xenium_proximity_stratum(cd, strata_cols)
+  cd$stratum <- cd$.stratum
 
   keep <- !is.na(cd$.cell_type) & nzchar(cd$.cell_type) &
     !is.na(cd$.stratum) & nzchar(cd$.stratum) &
