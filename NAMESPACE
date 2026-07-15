@@ -28,3 +28,5 @@ export(transfer_cell_annotations)
 
 export(subset_xenium_rois)
 export(derive_xenium_roi_table)
+
+export(analyze_xenium_cell_type_proximity)
