@@ -14,6 +14,8 @@ derive_xenium_roi_table(
   selection = c("balanced", "random"),
   random_seed = NULL,
   allow_overlap = FALSE,
+  roi_aspect_ratio = 1,
+  max_aspect_ratio = 2,
   max_cell_imbalance = 0.25,
   roi_id_prefix = "roi"
 )
@@ -51,6 +53,14 @@ to \code{FALSE}. Non-overlapping ROIs may be smaller than requested if
 \code{target_fraction} and \code{n_rois_per_sample} cannot fit inside
 the sample extent without overlap.}
 
+\item{roi_aspect_ratio}{Requested ROI width divided by height. The default
+of 1 produces square ROIs. A single physical width and height are derived
+from the median sample extent and used across samples, scaling down only
+when an ROI cannot fit within a sample or its non-overlap grid cell.}
+
+\item{max_aspect_ratio}{Maximum permitted elongation in either direction.
+For example, 2 permits width:height ratios from 1:2 through 2:1.}
+
 \item{max_cell_imbalance}{Maximum tolerated fractional imbalance in
 actual ROI cell counts within each sample before a warning is emitted.}
 
@@ -59,8 +69,8 @@ actual ROI cell counts within each sample before a warning is emitted.}
 \value{
 A data.frame with columns \code{sample}, \code{roi_id},
 \code{x_min}, \code{x_max}, \code{y_min}, \code{y_max},
-\code{target_fraction}, \code{actual_fraction}, \code{n_cells}, and
-\code{n_cells_in_roi} when cell counts are available.
+\code{roi_aspect_ratio}, \code{target_fraction}, \code{actual_fraction},
+\code{n_cells}, and \code{n_cells_in_roi} when cell counts are available.
 }
 \description{
 Automatically creates suggested rectangular ROIs per sample using the same
@@ -70,9 +80,12 @@ directly from \code{sample_table$cells_csv}, or from the \code{images}
 object returned by \code{build_xenium_images()}.
 }
 \details{
-When \code{n_rois_per_sample > 1}, the function suggests smaller ROIs by
-placing rectangles inside each sample's observed cell/image extent. Set
-\code{target_fraction} to the approximate fraction of each sample extent
-that should be retained across all ROIs. By default ROIs do not overlap. Use \code{selection = "random"} with
+When \code{n_rois_per_sample > 1}, the function suggests smaller,
+square-like ROIs inside each sample's observed cell/image extent. Their
+fixed physical dimensions are derived from the median sample extent so ROI
+size is comparable across samples. Boxes are scaled down only where needed
+to fit a smaller sample or a non-overlap grid cell. Set
+\code{target_fraction} to control their approximate combined area. By
+default ROIs do not overlap. Use \code{selection = "random"} with
 \code{random_seed} to generate reproducible random ROI suggestions.
 }
