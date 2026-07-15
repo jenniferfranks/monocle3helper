@@ -26,6 +26,7 @@ Imports:
     Matrix,
     methods,
     monocle3,
+    RANN,
     reticulate,
     stats,
     SummarizedExperiment,
@@ -33,5 +34,7 @@ Imports:
     tools,
     utils
 Suggests: 
-    rsbml
+    rsbml,
+    testthat (>= 3.0.0)
 RoxygenNote: 7.3.3
+Config/testthat/edition: 3

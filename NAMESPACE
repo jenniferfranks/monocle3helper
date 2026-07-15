@@ -30,3 +30,7 @@ export(subset_xenium_rois)
 export(derive_xenium_roi_table)
 
 export(analyze_xenium_cell_type_proximity)
+
+export(analyze_xenium_cell_proximity)
+export(plot_xenium_cell_proximity)
+export(compare_xenium_cell_proximity)

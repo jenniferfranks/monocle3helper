@@ -10,11 +10,11 @@ analyze_xenium_cell_type_proximity(
   sample_col = "sample",
   x_col = "x_centroid",
   y_col = "y_centroid",
-  k = 1,
-  max_distance = Inf,
+  k = 10,
+  max_distance = 50,
   include_same_type = TRUE,
   chunk_size = 1000,
-  return_neighbors = FALSE
+  return_neighbors = TRUE
 )
 }
 \arguments{
@@ -57,9 +57,7 @@ A list with:
 }
 }
 \description{
-For each Xenium cell, finds the nearest neighboring cells within each sample
-and summarizes which target cell types are closest to each source cell type.
-Distances are calculated from centroid coordinates in microns, using the
-\code{x_centroid} and \code{y_centroid} columns added by
-\code{build_xenium_cds()} by default.
+Deprecated compatibility wrapper around \code{analyze_xenium_cell_proximity()}.
+Use \code{analyze_xenium_cell_proximity()} for pairwise enrichment summaries,
+stratified abundance summaries, and plotting support.
 }
