@@ -34,3 +34,8 @@ export(analyze_xenium_cell_type_proximity)
 export(analyze_xenium_cell_proximity)
 export(plot_xenium_cell_proximity)
 export(compare_xenium_cell_proximity)
+
+export(xenium_proximity_enrichment)
+export(plot_xenium_proximity_heatmap)
+export(plot_xenium_proximity_barplot)
+export(plot_xenium_proximity_network)
