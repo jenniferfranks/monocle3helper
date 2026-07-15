@@ -33,7 +33,8 @@ Imports:
     tibble,
     tools,
     utils
-Suggests: 
+Suggests:
+    deldir,
     rsbml,
     testthat (>= 3.0.0)
 RoxygenNote: 7.3.3
