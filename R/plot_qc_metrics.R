@@ -14,8 +14,10 @@
 #' @param mito_max Optional maximum mitochondrial percentage threshold.
 #' @param scrublet_max Optional maximum Scrublet score threshold.
 #' @param bins Number of histogram bins.
+#' @param return_list Logical. If TRUE, return plots together with QC filtering
+#'   results. If FALSE, return only the plots.
 #'
-#' @return A named list containing:
+#' @return If `return_list = TRUE`, a named list containing:
 #' \describe{
 #'   \item{umi}{Histogram of UMI counts.}
 #'   \item{mito}{Histogram of mitochondrial percentage.}
@@ -23,6 +25,13 @@
 #'   \item{keep}{Logical vector indicating cells passing QC thresholds.}
 #'   \item{n_cells_before}{Number of cells before filtering.}
 #'   \item{n_cells_after}{Number of cells passing QC thresholds.}
+#' }
+#'
+#' If `return_list = FALSE`, a named list containing:
+#' \describe{
+#'   \item{umi}{Histogram of UMI counts.}
+#'   \item{mito}{Histogram of mitochondrial percentage.}
+#'   \item{scrublet}{Histogram of Scrublet scores.}
 #' }
 #'
 #' @examples
@@ -37,6 +46,14 @@
 #'     scrublet_max = 0.1
 #' )
 #'
+#' qc_results <- plot_qc_metrics(
+#'     qc_df,
+#'     n_umi_col = "nUMI",
+#'     percent_mito_col = "percent_mito",
+#'     scrublet_col = "scrublet_score",
+#'     return_list = TRUE
+#' )
+#'
 #' @export
 plot_qc_metrics <- function(
     qc_df,
@@ -47,7 +64,8 @@ plot_qc_metrics <- function(
     umi_max = NULL,
     mito_max = NULL,
     scrublet_max = NULL,
-    bins = 100
+    bins = 100,
+    return_list = FALSE
 ) {
 
     ## ------------------------
@@ -251,12 +269,27 @@ plot_qc_metrics <- function(
     ## Return
     ## ------------------------
 
-    list(
-        umi = p_umi,
-        mito = p_mito,
-        scrublet = p_scrub,
-        keep = keep,
-        n_cells_before = n_cells_before,
-        n_cells_after = n_cells_after
-    )
+    if (return_list) {
+
+        return(
+            list(
+                umi = p_umi,
+                mito = p_mito,
+                scrublet = p_scrub,
+                keep = keep,
+                n_cells_before = n_cells_before,
+                n_cells_after = n_cells_after
+            )
+        )
+
+    } else {
+
+        return(
+            list(
+                umi = p_umi,
+                mito = p_mito,
+                scrublet = p_scrub
+            )
+        )
+    }
 }
