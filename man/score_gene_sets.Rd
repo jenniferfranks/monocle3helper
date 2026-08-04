@@ -40,6 +40,8 @@ gene_sets <- list(
   EMT  = c("Vim", "Cdh2", "Zeb1")
 )
 
+
+
 scores <- score_gene_sets(
   cds,
   gene_sets,
