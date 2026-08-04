@@ -65,6 +65,8 @@ downsample_cds <- function(
     sampled_ids <- character(0)
   } else {
     large_counts <- type_counts[large_types]
+    print(is.na(large_counts))
+
     n_large <- sum(large_counts)
     # proportional allocation, capped at each type's own size
     alloc <- floor(budget * large_counts / n_large)
