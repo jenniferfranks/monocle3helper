@@ -1,3 +1,5 @@
+#' Plot QC metrics as violin plots
+#' 
 plot_qc_violins <- function(
     metadata_df,
     metrics,

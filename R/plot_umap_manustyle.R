@@ -1,3 +1,5 @@
+#' Plot UMAP with custom styling
+#' 
 plot_umap_manustyle <- function(
   cds,
   celltype_colors = NULL,

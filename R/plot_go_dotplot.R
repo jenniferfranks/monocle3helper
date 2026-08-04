@@ -1,3 +1,5 @@
+#' Plot GO term enrichment dotplot
+
 plot_go_dotplot <- function(df, total_genes = NULL, top_n = 20) {
   
   # Check required columns

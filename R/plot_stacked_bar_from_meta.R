@@ -1,3 +1,5 @@
+#' Plot stacked bar chart from metadata
+#' 
 plot_stacked_bar_from_meta <- function(
   meta1,             # first metadata column (e.g., cell type)
   meta2,             # second metadata column (e.g., sample or condition)
